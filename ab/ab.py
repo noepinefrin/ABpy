@@ -11,6 +11,16 @@ class ABpy(ABcolumns):
 
     def __init__(self, data: pd.DataFrame, target_class: str, test_variables: list | tuple, significance_level: float = 0.05) -> None:
 
+        """
+        Initialize the A/B Testing class.
+
+        Parameters:
+        - data: DataFrame containing the data for A/B Testing.
+        - target_class: Name of the column representing the target classes.
+        - test_variables: List or tuple of variables to perform A/B Testing on.
+        - significance_level: Significance level for hypothesis testing (default is 0.05).
+        """
+
         self.unique_classes = data[target_class].unique()
 
         assert self.unique_classes.shape == (2, ), "You just compare only 2 targets at the same time."
@@ -31,6 +41,17 @@ class ABpy(ABcolumns):
         }
 
     def apply(self, verbose: bool = True) -> pd.DataFrame:
+
+        """
+        Apply A/B Testing on the specified variables.
+
+        Parameters:
+        - verbose: Boolean flag indicating whether to display verbose output (default is True).
+
+        Returns:
+        - DataFrame containing the A/B Testing results.
+        """
+
         self.result = pd.DataFrame(**self.result_format)
         self.verbose = verbose
 
@@ -62,6 +83,17 @@ class ABpy(ABcolumns):
         return self.result
 
     def _is_normally_distributed(self, variable: str) -> bool:
+
+        """
+        Check if the data for a variable is normally distributed using Shapiro-Wilk test.
+
+        Parameters:
+        - variable: Name of the variable to check for normal distribution.
+
+        Returns:
+        - Boolean indicating whether the data is normally distributed.
+        """
+
         group_a_w, group_a_pval = stats.shapiro(self.group_a[variable])
         group_b_w, group_b_pval = stats.shapiro(self.group_b[variable])
 
@@ -99,6 +131,16 @@ class ABpy(ABcolumns):
 
     def _is_equal_variance(self, variable: str) -> bool:
 
+        """
+        Check if the variances of two groups are equal using Levene's test.
+
+        Parameters:
+        - variable: Name of the variable to check for equal variance.
+
+        Returns:
+        - Boolean indicating whether the variances are equal.
+        """
+
         f_value, levene_p = stats.levene(self.group_a[variable], self.group_b[variable])
 
         pval_scientific = "{:.3e}".format(levene_p)
@@ -123,6 +165,17 @@ class ABpy(ABcolumns):
 
     def _t_test_significance(self, variable: str, equal_var: bool = False) -> bool:
 
+        """
+        Perform independent samples t-test for significance.
+
+        Parameters:
+        - variable: Name of the variable to perform t-test on.
+        - equal_var: Boolean indicating whether variances are assumed to be equal (default is False).
+
+        Returns:
+        - Boolean indicating whether the t-test is statistically significant.
+        """
+
         t_value, t_test_p = stats.ttest_ind(self.group_a[variable], self.group_b[variable], equal_var=equal_var)
 
         pval_scientific = "{:.3e}".format(t_test_p)
@@ -135,16 +188,27 @@ class ABpy(ABcolumns):
         for column, value in zip(self.ttest_columns, values):
             self._update_result(variable=variable, column=column, value=value)
 
-        self._mean(variable=variable)
-
         is_significant = t_test_p > self.significance_level
 
         if self.verbose:
             self.__ttest_verb(variable, t_value, pval_scientific, is_significant)
 
+        self._mean(variable=variable)
+
         return is_significant
 
     def _mann_whitney_u_test(self, variable: str) -> bool:
+
+        """
+        Perform Mann-Whitney U test for non-normally distributed data.
+
+        Parameters:
+        - variable: Name of the variable to perform Mann-Whitney U test on.
+
+        Returns:
+        - Boolean indicating whether the Mann-Whitney U test is statistically significant.
+        """
+
         u_value, mannw_test_pval = stats.mannwhitneyu(self.group_a[variable], self.group_b[variable])
 
         pval_scientific = "{:.3e}".format(mannw_test_pval)
@@ -157,16 +221,25 @@ class ABpy(ABcolumns):
         for column, value in zip(self.mannw_columns, values):
             self._update_result(variable=variable, column=column, value=value)
 
-        self._median(variable=variable)
 
         is_significant = mannw_test_pval > self.significance_level
 
         if self.verbose:
-            pass
+            self.__mannw_verb(variable, u_value, pval_scientific, is_significant)
+
+        self._median(variable=variable)
 
         return is_significant
 
     def _mean(self, variable: str) -> None:
+
+        """
+        Calculate and display means for two groups.
+
+        Parameters:
+        - variable: Name of the variable to calculate means for.
+        """
+
         group_a_mean = self.group_a.loc[:, variable].mean()
         group_b_mean = self.group_b.loc[:, variable].mean()
 
@@ -180,12 +253,20 @@ class ABpy(ABcolumns):
 
         if self.verbose:
             if is_greater:
-                print(f'\nMean of A in {variable} is greater than B', '\n')
+                print(f'Mean of A in {variable} is greater than B', '\n')
             else:
-                print(f'\nMean of B in {variable} is greater than A', '\n')
+                print(f'Mean of B in {variable} is greater than A', '\n')
 
 
     def _median(self, variable: str) -> None:
+
+        """
+        Calculate and display medians for two groups.
+
+        Parameters:
+        - variable: Name of the variable to calculate medians for.
+        """
+
         group_a_median = self.group_a.loc[:, variable].median()
         group_b_median = self.group_b.loc[:, variable].median()
 
@@ -199,14 +280,32 @@ class ABpy(ABcolumns):
 
         if self.verbose:
             if is_greater:
-                print(f'\nMedian of A in {variable} is greater than B', '\n')
+                print(f'Median of A in {variable} is greater than B', '\n')
             else:
-                print(f'\nMedian of B in {variable} is greater than A', '\n')
+                print(f'Median of B in {variable} is greater than A', '\n')
 
     def _update_result(self, variable: str, column: str, value: int | float | str) -> None:
+
+        """
+        Update the result DataFrame with a specific value.
+
+        Parameters:
+        - variable: Name of the variable.
+        - column: Name of the column in the result DataFrame.
+        - value: Value to be updated in the result DataFrame.
+        """
+
         self.result.loc[variable, column] = value
 
     def _run(self, variable):
+
+        """
+        Display summary statistics and visualizations for a variable if verbose=True.
+
+        Parameters:
+        - variable: Name of the variable.
+        """
+
         if self.verbose:
             print(
             colored(f'-'*85, 'magenta', attrs=['bold']),
@@ -228,6 +327,14 @@ class ABpy(ABcolumns):
             self._draw_boxplot(variable=variable)
 
     def _draw_hist(self, variable) -> None:
+
+        """
+        Draw histogram for a variable.
+
+        Parameters:
+        - variable: Name of the variable.
+        """
+
         print(colored(f' Histogram by groups for {variable} ', 'white', 'on_light_green', attrs=['bold', 'reverse', 'blink']))
 
         sns.displot(
@@ -242,6 +349,14 @@ class ABpy(ABcolumns):
         plt.show()
 
     def _draw_boxplot(self, variable) -> None:
+
+        """
+        Draw boxplot for a variable.
+
+        Parameters:
+        - variable: Name of the variable.
+        """
+
         print(colored(f' Boxplot by groups for {variable} ', 'white', 'on_light_red', attrs=['bold', 'reverse', 'blink']))
 
         ax = sns.violinplot(
@@ -297,6 +412,18 @@ class ABpy(ABcolumns):
         plt.show()
 
     def __dist_verb(self, variable: str, a_pval: str, b_pval: str, a_significance: bool, b_significance: bool) -> None:
+
+        """
+        Display distribution-related verbose information.
+
+        Parameters:
+        - variable: Name of the variable.
+        - a_pval: P-value for group A.
+        - b_pval: P-value for group B.
+        - a_significance: Significance of normality for group A.
+        - b_significance: Significance of normality for group B.
+        """
+
         print(
             colored(f' 1. Step: Testing the Normality Assumption for {variable} using Shaphiro Wilk Test', 'white', 'on_cyan', attrs=['bold', 'reverse', 'blink']),
             '\n',
@@ -345,6 +472,17 @@ class ABpy(ABcolumns):
             )
 
     def __homogeneity_assumption_verb(self, variable: str, levene_f: str, levene_pval: str, is_equal_variance: bool) -> None:
+
+        """
+        Display homogeneity assumption-related verbose information.
+
+        Parameters:
+        - variable: Name of the variable.
+        - levene_f: Levene's F-value.
+        - levene_pval: P-value from Levene's test.
+        - is_equal_variance: Whether variances are equal.
+        """
+
         print(
             colored(f' 2. Step: Testing the Homogeneity Assumption for {variable} using Levene\'s F-Test', 'white', 'on_cyan', attrs=['bold', 'reverse', 'blink']),
             '\n',
@@ -363,4 +501,81 @@ class ABpy(ABcolumns):
             )
 
     def __ttest_verb(self, variable, ttest_t, ttest_p, is_significant):
-        pass
+
+        """
+        Display t-test-related verbose information.
+
+        Parameters:
+        - variable: Name of the variable.
+        - ttest_t: T-value from t-test.
+        - ttest_p: P-value from t-test.
+        - is_significant: Whether the t-test is statistically significant.
+        """
+
+        print(
+            colored(f' 3. Step: Independent samples T-Test for {variable} using T-Test', 'white', 'on_cyan', attrs=['bold', 'reverse', 'blink']),
+            '\n',
+            '\n',
+            f'T-Test P-Value: {ttest_p} & T-Test T-Value: {ttest_t}',
+            '\n',
+            sep=''
+        )
+
+        if is_significant:
+            print(
+                f'Independent samples T-Test resulted as p > {self.significance_level} for A and B which indicates that H0 can NOT be rejected. ',
+                '\n',
+                f'Accordingly T-Test results, there is no significant difference between A and B for {variable}.',
+                '\n',
+                sep=''
+            )
+
+        else:
+
+            print(
+                f'Independent samples T-Test resulted as p < {self.significance_level} for A and B which indicates that H0 is rejected. ',
+                '\n',
+                f'Accordingly T-Test results, there is significant difference between A and B for {variable}.',
+                '\n',
+                sep=''
+            )
+
+    def __mannw_verb(self, variable, mannw_u, mannw_p, is_significant):
+
+        """
+        Display t-test-related verbose information.
+
+        Parameters:
+        - variable: Name of the variable.
+        - ttest_t: T-value from t-test.
+        - ttest_p: P-value from t-test.
+        - is_significant: Whether the t-test is statistically significant.
+        """
+
+        print(
+            colored(f' 3. Step: Alternative -> Mann Whitney U-Test for {variable}', 'white', 'on_cyan', attrs=['bold', 'reverse', 'blink']),
+            '\n',
+            '\n',
+            f'Mann Whitney U-Test P-Value: {mannw_p} & Mann Whitney U-Test U-Value: {mannw_u}',
+            '\n',
+            sep=''
+        )
+
+        if is_significant:
+            print(
+                f'Mann Whitney U-Test resulted as p > {self.significance_level} for A and B which indicates that H0 can NOT be rejected. ',
+                '\n',
+                f'Accordingly Mann Whitney U-Test results, there is no significant difference between A and B for {variable}.',
+                '\n',
+                sep=''
+            )
+
+        else:
+
+            print(
+                f'Mann Whitney U-Test resulted as p < {self.significance_level} for A and B which indicates that H0 is rejected. ',
+                '\n',
+                f'Accordingly Mann Whitney U-Test results, there is significant difference between A and B for {variable}.',
+                '\n',
+                sep=''
+            )
